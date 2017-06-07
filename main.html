@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Route Optimizer</title>
+    <style>
+      #map {
+        height: 90%;
+      }
+
+      #function_buttons {
+      	height: 10%;
+      }
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id = "map"></div>
+    <div id = "function_buttons">
+    	<input id = "get_data" type="button" value="Get Data" onclick="get_complete_data()">
+    	<input id = "generate_routes" type="button" value="Generate Routes" onclick="generate_route()">
+    	<input id = "save" type="button" disabled value="Save">
+    	<input id = "add_vehicle" type="button" disabled value="Add Vehicle">
+    </div>
+    <script>
+
+		function initMap() {
+			map = new google.maps.Map(document.getElementById('map'), {
+			  zoom: 10,
+			  center: {lat:30.9, lng:76.9}
+			});
+		}
+
+		function bindInfoWindow(marker, map, infowindow, content) {
+		    marker.addListener('click', function() {
+		        infowindow.setContent(content);
+		        infowindow.open(map, this);
+		    });
+		} 
+
+		function get_complete_data() {
+			// file = "File:\\/home/shreya/jugnoo/data.json";
+			file = "data.json";
+		    var rawFile = new XMLHttpRequest();
+		    rawFile.open("GET", file, false);
+		    rawFile.onreadystatechange = function ()
+		    {
+		        if(rawFile.readyState === 4)
+		        {
+		            if(rawFile.status === 200 || rawFile.status == 0)
+		            {
+		                allText = rawFile.responseText;
+		                allText = JSON.parse(allText);
+		                for (var i_locality in allText) {
+							// console.log({lat : allText[i_locality].delivery_latitude, lng :  allText[i_locality].delivery_longitude});
+
+							
+		                	var marker = new google.maps.Marker({
+								position: {lat : allText[i_locality].delivery_latitude, lng :  allText[i_locality].delivery_longitude},
+								map: map
+							});
+							var contentString = '<b>' + allText[i_locality].order_id + '</b>: ' + allText[i_locality].delivery_address;
+							var infowindow = new google.maps.InfoWindow({
+					          content: contentString 
+					        });
+					        bindInfoWindow(marker, map, infowindow, contentString); 
+		                }
+		            }
+		        }
+		    }
+		    rawFile.send(null);
+		}
+
+		function generate_route() {
+		    var service_data=[]
+		    for (var i_arr in allText){
+		    	service_data.push({"id":String(allText[i_arr].order_id), "lat":allText[i_arr].delivery_latitude, "lng":allText[i_arr].delivery_longitude, "name":String(allText[i_arr].order_id), "duration":5});
+		    }
+		    var service_string = JSON.stringify(service_data);
+			$.ajax({
+				url:"https://api.flightmap.io/api/v1/vrp",
+				async: false,
+				type: "POST",
+				headers: {
+			        "Authorization": "772ea600-78ad-11e6-a56b-0bff586a75e5",
+        			"Content-Type": "application/json; charset=utf-8"
+			    },
+			    data: "{\"service\":"+service_string+",\"fleet\":[{\"id\":1,\"lat\":30.7188978,\"lng\":76.8102981,\"latEnd\":30.7188978,\"lngEnd\":76.8102981,\"returnToStart\":0}],\"maxVisits\":6,\"polylines\":false,\"distanceCalculation\":false,\"speed\":40,\"decideFleetSize\":1}",
+			    success: function (response) {
+			    	for (var key in Object.keys(response.data.solutions)) {
+			    		var flightPlanCoordinates = [/*{"lat":30.7188978, "lng":76.8102981}*/]
+			    		var decoded_polyline = decode(response.data.polylines[Object.keys(response.data.solutions)[key]]);
+			    		for (var i_pos in decoded_polyline){
+			    			flightPlanCoordinates.push({"lat":decoded_polyline[i_pos].latitude, "lng":decoded_polyline[i_pos].longitude});
+			    		}
+			    // 		var next_object = response.data.solutions[Object.keys(response.data.solutions)[key]];
+			    // 		for (var next_key in next_object) {
+			    // 			var elementPos = allText.map(function(x) {return x.order_id; }).indexOf(Number(next_object[next_key].id));
+							// var objectFound = allText[elementPos];
+			    // 			flightPlanCoordinates.push({"lat":objectFound.delivery_latitude,"lng":objectFound.delivery_longitude})
+			    // 		}
+			    		// flightPlanCoordinates.push({"lat":30.7188978, "lng":76.8102981})
+			    		var flightPath = new google.maps.Polyline({
+				          path: flightPlanCoordinates,
+				          geodesic: true,
+				          strokeColor: '#'+Math.floor(Math.random()*16777215).toString(16),
+				          strokeOpacity: 1.0,
+				          strokeWeight: 4
+				        });
+
+        				flightPath.setMap(map);
+			    	}
+			    },
+                error: function (xhr, ajaxOptions, thrownError) {
+                    console.log("error ", xhr);
+                }
+
+			});
+		}
+    </script>
+    <script async defer
+    src = "https://maps.googleapis.com/maps/api/js?key=AIzaSyD9BEvbY1ESxDSTNzrylzKnkFBxPfCVqHA&callback=initMap">
+    </script>
+    <script src = "jquery.min.js"></script>
+    <script src = "decoder.js"></script>
+  </body>
+</html>
